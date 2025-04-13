@@ -1,0 +1,217 @@
+---
+title: "Word Frequency Analysis in Orbital Inflammation Literature"
+format:
+  html:
+    code-fold: true
+jupyter: python3
+---
+
+```{python}
+from pathlib import Path
+pub_dir = Path.cwd() / "orbital_publications"
+f_list = sorted([x for x in pub_dir.glob("*.pdf")])
+years = [2005, 2007, 2010, 2016, 2024, 2016,
+         2020, 2022, 2016, 2017, 2017, 2019,
+         2024, 2004, 2014, 2021, 2015, 2007,
+         2011, 2017, 2024, 2015, 2023, 2022,
+         2020, 2021, 2015, 2024, 2023,
+         2021, 2013, 2023, 2012, 2022, 2024,
+         2008, 2019, 2015, 2011, 2016, 2019,
+         2007, 2006, 2007, 2022, 2022, 2022,
+         2014, 2012, 2018, 2021, 2022, 2017,
+         2009, 2013, 2013, 2012, 2014, 2022,
+         2006, 2016, 2017, 2011, 2008, 2006,
+         2014, 2012, 2009, 2010, 2016, 2015,
+         2018, 2016, 2014, 2023, 2018, 2014,
+         2008, 2024, 2014, 2013, 2022, 2024,
+         2011, 2021, 2023, 2014, 2024, 2023,
+         2014, 2019, 2017, 2015, 2013, 2013,
+         2015, 2022, 2009, 2012, 2014, 2024,
+         2021, 2020, 2022, 2024, 2018, 2017,
+         2021, 2008, 2012, 2010, 2008, 2021,
+         2019, 2013, 2018, 2018, 2017, 2007,
+         2012, 2011, 2008, 2017, 2017, 2009,
+         2024, 2013]
+assert len(f_list) == len(years)
+files = {2005 : [], 2010 : [], 2015 : [], 2020 : []}
+for i, f in enumerate(f_list):
+  if years[i] < 2010:
+    files[2005].append(f)
+  elif years[i] < 2015:
+    files[2010].append(f)
+  elif years[i] < 2020:
+    files[2015].append(f)
+  else:
+    files[2020].append(f)
+```
+
+```{python}
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+def load_medllama_3():
+    tokenizer = AutoTokenizer.from_pretrained("Henrychur/MMed-Llama-3-8B")
+    return tokenizer
+```
+
+```{python}
+import spacy
+from tokenizers import normalizers, NormalizedString
+from tokenizers.normalizers import NFD, StripAccents
+from tokenizers.pre_tokenizers import Whitespace
+import string
+
+
+def filter_text(t, tokenizer):
+    nlp = spacy.load("en_core_web_sm")
+    stopwords = []
+    #Stopwords from: https://www.oocities.org/gumby9/physicians/advanced/stopwords.pdf
+    with open("pubmed_stopwords.txt", "r") as f:
+        for line in f:
+            stopwords.append(line.strip())
+    with open("custom_stopwords.txt", "r") as f:
+        for line in f:
+            stopwords.append(line.strip())
+    stopwords = set(stopwords)
+    normalizer = normalizers.Sequence([NFD(), StripAccents()])
+    pre_tokenizer = Whitespace()
+    #t = normalizer.normalize(NormalizedString(t))
+    #I'm not sure if this will actually do anything. Maybe filter unknown tokens?
+    #In any case lets give it a chance
+    t = tokenizer.decode(tokenizer.encode(t), skip_special_tokens=True, clean_up_tokenization_spaces=True)
+    t = t.translate(str.maketrans('', '', string.punctuation)).lower()
+    t = pre_tokenizer.pre_tokenize_str(t)
+    j = " ".join([w[0] for w in t])
+    doc = nlp(j)
+    #Remove stopwords
+    return [toke.lemma_ for toke in doc if toke.lemma_ not in stopwords and not toke.lemma_.isnumeric()]
+```
+
+```{python}
+from collections import Counter
+from pathlib import Path
+
+def count_differences(year_list):
+    results = []
+    sorted_years = sorted(year_list.keys())
+
+    for i in range(len(sorted_years) - 1):
+        y1, y2 = sorted_years[i], sorted_years[i+1]
+        vocab1, vocab2 = year_list[y1], year_list[y2]
+        y1_norm = sum(vocab1.values())
+        y2_norm = sum(vocab2.values())
+        if y1_norm == 0 or y2_norm == 0:
+            continue
+
+        top_50_y1 = [word for word, _ in Counter(vocab1).most_common(50)]
+        sorted_y1_words = sorted(top_50_y1, key=lambda word: vocab2.get(word, 0))
+        y1_diffs = sorted([(w, (vocab2.get(w, 0)/y2_norm) - (vocab1.get(w, 0)/y1_norm)) for w in sorted_y1_words], key=lambda p: p[1])
+
+        top_50_y2 = [word for word, _ in Counter(vocab2).most_common(50)]
+        sorted_y2_words = sorted(top_50_y2, key=lambda word: vocab1.get(word, 0))
+        y2_diffs = sorted([(w, (vocab2.get(w, 0)/y2_norm) - (vocab1.get(w, 0)/y1_norm)) for w in sorted_y2_words], key=lambda p: p[1], reverse=True)
+
+        decrease_table = [
+            {"Year1": y1, "Year2": y2, "Rank": rank+1, "Word": word, "Diff": round(diff*100, 3), "Sign": "+" if diff > 0 else "-" if diff < 0 else "="}
+            for rank, (word, diff) in enumerate(y1_diffs)
+        ]
+
+        increase_table = [
+            {"Year1": y1, "Year2": y2, "Rank": rank+1, "Word": word, "Diff": round(diff*100, 3), "Sign": "+" if diff > 0 else "-" if diff < 0 else "="}
+            for rank, (word, diff) in enumerate(y2_diffs)
+        ]
+
+        results.append({
+            "pair": f"{y1}-{y1+5} to {y2}-{y2+5}",
+            "biggest_decrease": decrease_table,
+            "biggest_increase": increase_table
+        })
+
+    return results
+
+
+def count_treatments(t_types, tokens):
+    terms = {"Corticosteroids" : ["corticosteroids"], "Immunosuppresants" : ["methotrexate", "azathioprine", "mycophenlate mofetil", "cyclosporine"],
+             "Biologic Agents" : ["rituximab"], "Radiotherapy" : ["radiotherapy"], "Surgical Intervention" : ["surgery", "surgical"]}
+    for t, t_list in terms.items():
+        if any([w in tokens for w in t_list]):
+            t_types[t] += 1
+```
+
+
+```{python}
+import fitz
+tokenizer = load_medllama_3()
+t_types = {"Corticosteroids" : 0, "Immunosuppresants" : 0, "Biologic Agents" : 0, "Radiotherapy" : 0, "Surgical Intervention" : 0} 
+vocab_by_year = {}
+counts = []
+results = []
+for year, file_list in files.items():
+  vocab = {}
+  pub_count = {}
+  for f in file_list:
+    with fitz.open(f) as pdf:
+      text = " ".join([page.get_text("text") for page in pdf])
+      
+    tokens = filter_text(text, tokenizer) 
+    count_treatments(t_types, tokens)            
+    this_doc = set([])
+    for t in tokens:
+      if t not in vocab:
+        vocab[t] = 0
+      vocab[t] += 1
+      if t not in this_doc:
+        this_doc.add(t)
+        if t not in pub_count:
+            pub_count[t] = 0
+        pub_count[t] += 1
+  vocab_by_year[year] = vocab
+  top_50 = sorted(vocab.items(), key=lambda item: item[1], reverse=True)[:100]
+  #TODO: Replace this with some pretty printing; we're in a Quarto doc!
+  #with open(year_dir / "top_50.txt", "w") as f:
+  #  f.write("Rank | Word | Num_Docs\n")
+  #  f.write("---------------------------\n")
+  #  for i, word in enumerate(top_50):
+  #    f.write(f"{i:>2} | {word[0]:<15} | {pub_count[word[0]]}\n")
+  #with open(year_dir / "treatment_types.pkl", "wb") as f:
+  #  pickle.dump(t_types, f)
+  tab = [
+    {
+      "Rank": i + 1,
+      "Word": word,
+      "Num_Docs": pub_count[word]
+    }
+    for i, (word, _) in enumerate(top_50)
+  ]
+  results.append({
+    "pair": f"{year}-{year+5}",
+    "top_50": tab,
+  })
+  
+ojs_define(diff_data = count_differences(vocab_by_year))
+ojs_define(top50 = results)
+#print(diff_data)
+```
+
+```{ojs}
+import {Table} from "@observablehq/inputs"
+
+viewof year = Inputs.select(
+  top50.map(d => d.pair),
+{ label: "Select Year", value: top50[0].pair}
+)
+
+selected_year = top50.find(d => d.pair === year)
+md`### Top 50`
+Table(selected_year.top_50)
+
+viewof year_pair = Inputs.select(
+  diff_data.map(d => d.pair),
+  { label: "Select Year Pair", value: diff_data[0].pair }
+)
+selected = diff_data.find(d => d.pair === year_pair)
+md`### Words with Biggest Decrease`
+Table(selected.biggest_decrease)
+md`### Words with Biggest Increase`
+Table(selected.biggest_increase)
+
+```
