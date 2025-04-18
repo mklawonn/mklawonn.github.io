@@ -7,6 +7,7 @@ jupyter: python3
 ---
 
 ```{python}
+#| echo: false
 from pathlib import Path
 pub_dir = Path.cwd() / "orbital_publications"
 f_list = sorted([x for x in pub_dir.glob("*.pdf")])
@@ -46,6 +47,7 @@ for i, f in enumerate(f_list):
 ```
 
 ```{python}
+#| echo: false
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 def load_medllama_3():
@@ -54,15 +56,18 @@ def load_medllama_3():
 ```
 
 ```{python}
+#| echo: false
 import spacy
 from tokenizers import normalizers, NormalizedString
-from tokenizers.normalizers import NFD, StripAccents
+from tokenizers.normalizers import NFD, StripAccents, NFC
 from tokenizers.pre_tokenizers import Whitespace
 import string
 
 
 def filter_text(t, tokenizer):
+    import unicodedata
     nlp = spacy.load("en_core_web_sm")
+    #nlp = spacy.load("en_core_web_trf")
     stopwords = []
     #Stopwords from: https://www.oocities.org/gumby9/physicians/advanced/stopwords.pdf
     with open("pubmed_stopwords.txt", "r") as f:
@@ -73,8 +78,12 @@ def filter_text(t, tokenizer):
             stopwords.append(line.strip())
     stopwords = set(stopwords)
     normalizer = normalizers.Sequence([NFD(), StripAccents()])
+    t = normalizer.normalize_str(t)
+    t = unicodedata.normalize("NFKD", t)
+    t = "".join([c for c in t if not unicodedata.combining(c)])
     pre_tokenizer = Whitespace()
     #t = normalizer.normalize(NormalizedString(t))
+    #print(t)
     #I'm not sure if this will actually do anything. Maybe filter unknown tokens?
     #In any case lets give it a chance
     t = tokenizer.decode(tokenizer.encode(t), skip_special_tokens=True, clean_up_tokenization_spaces=True)
@@ -84,9 +93,11 @@ def filter_text(t, tokenizer):
     doc = nlp(j)
     #Remove stopwords
     return [toke.lemma_ for toke in doc if toke.lemma_ not in stopwords and not toke.lemma_.isnumeric()]
+    #return [str(toke) for toke in doc if str(toke) not in stopwords and not toke.lemma_.isnumeric()]
 ```
 
 ```{python}
+#| echo: false
 from collections import Counter
 from pathlib import Path
 
@@ -94,8 +105,12 @@ def count_differences(year_list):
     results = []
     sorted_years = sorted(year_list.keys())
 
-    for i in range(len(sorted_years) - 1):
-        y1, y2 = sorted_years[i], sorted_years[i+1]
+    for i in range(len(sorted_years)):
+        if i == len(sorted_years) - 1:
+          y1 = sorted_years[0]
+          y2 = sorted_years[i]
+        else:
+          y1, y2 = sorted_years[i], sorted_years[i+1]
         vocab1, vocab2 = year_list[y1], year_list[y2]
         y1_norm = sum(vocab1.values())
         y2_norm = sum(vocab2.values())
@@ -137,9 +152,28 @@ def count_treatments(t_types, tokens):
             t_types[t] += 1
 ```
 
+## Parsing a PDF
+Given the collection of PDFs that we want to analyze, let us now describe how each document is processed. We first use the PyMuPDF tool to extract the visible
+text of a PDF. Then we normalize the text. Normalization in our case includes reducing strings to lowercase and resolving similar looking unicode characters to a common
+character. It is necessary because of how text is represented in digital documents like PDFs. A word in a PDF is a sequence of characters, and there are many more 
+unicode characters than one might think, even when considering English-only text. For example, [this chart](https://gist.github.com/StevenACoffman/a5f6f682d94e38ed804182dc2693ed4b) shows unicode characters that
+appear similar to some common English character. Each entry in the "look-alike" column is a different unicode character than the "original letter."
+
+After normalizing text, we tokenize it. Tokenization involves splitting text into its constituent parts, i.e. words. This is done more or less by looking for whitespace
+characters, and considering the groups of characters they surround as individual words.
+
+Next, we remove stopwords, which are uninformative but frequently occurring words such as articles ("the", "an", etc), prepositions, and so on. 
+More specifically, we leverage a list of stopwords designed for [medical corpora](https://www.oocities.org/gumby9/physicians/advanced/stopwords.pdf
+). In addition to common English words, this list contains entries such as "oz" and "significantly" that may be less common in
+everyday speech but prevalent in medical literature. We augment these words with some frequently occurring uninformative words we noticed in our experiments. 
+A full list can be provided on request.
+
+Lastly, we lemmatize the words. Lemmatization involves reducing words to their "root" word. For example, both "are" and "being" can be reduced to "be" via certain
+lemmatizers. We perform this step so that very similar words can be considered "the same" and their counts can be added. Lemmatizers are imperfect and some words that appear to have the same root can be missed.
 
 ```{python}
 import fitz
+from tqdm import tqdm
 tokenizer = load_medllama_3()
 t_types = {"Corticosteroids" : 0, "Immunosuppresants" : 0, "Biologic Agents" : 0, "Radiotherapy" : 0, "Surgical Intervention" : 0} 
 vocab_by_year = {}
@@ -187,10 +221,16 @@ for year, file_list in files.items():
     "top_50": tab,
   })
   
+  #for s, count in top_50:
+  #  print(f"'{s}': {" ".join([str(ord(char)) for char in s])}")
+  
 ojs_define(diff_data = count_differences(vocab_by_year))
 ojs_define(top50 = results)
 #print(diff_data)
 ```
+
+## TODO
+I can describe the counting procedure, if it's unclear.
 
 ```{ojs}
 import {Table} from "@observablehq/inputs"
@@ -201,7 +241,7 @@ viewof year = Inputs.select(
 )
 
 selected_year = top50.find(d => d.pair === year)
-md`### Top 50`
+md`### Top Words`
 Table(selected_year.top_50)
 
 viewof year_pair = Inputs.select(
