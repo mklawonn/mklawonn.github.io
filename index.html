@@ -107,7 +107,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>After normalizing text, we tokenize it. Tokenization involves splitting text into its constituent parts, i.e.&nbsp;words. This is done more or less by looking for whitespace characters, and considering the groups of characters they surround as individual words.</p>
 <p>Next, we remove stopwords, which are uninformative but frequently occurring words such as articles (“the”, “an”, etc), prepositions, and so on. More specifically, we leverage a list of stopwords designed for <a href="https://www.oocities.org/gumby9/physicians/advanced/stopwords.pdf">medical corpora</a>. In addition to common English words, this list contains entries such as “oz” and “significantly” that may be less common in everyday speech but prevalent in medical literature. We augment these words with some frequently occurring uninformative words we noticed in our experiments. A full list can be provided on request.</p>
 <p>Lastly, we lemmatize the words. Lemmatization involves reducing words to their “root” word. For example, both “are” and “being” can be reduced to “be” via certain lemmatizers. We perform this step so that very similar words can be considered “the same” and their counts can be added. Lemmatizers are imperfect and some words that appear to have the same root can be missed.</p>
-<div id="a3caaaa5" class="cell" data-execution_count="5">
+<div id="27126033" class="cell" data-execution_count="5">
 <details class="code-fold">
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> fitz</span>
@@ -176,7 +176,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="todo" class="level2">
 <h2 class="anchored" data-anchor-id="todo">TODO</h2>
-<p>I can describe the counting procedure, if it’s unclear.</p>
+<p>I can describe the counting procedure if it’s unclear.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>

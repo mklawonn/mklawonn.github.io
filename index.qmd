@@ -230,7 +230,7 @@ ojs_define(top50 = results)
 ```
 
 ## TODO
-I can describe the counting procedure, if it's unclear.
+I can describe the counting procedure if it's unclear.
 
 ```{ojs}
 import {Table} from "@observablehq/inputs"
