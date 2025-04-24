@@ -1,0 +1,98 @@
+---
+title: "Visualizing Paths"
+format:
+  html:
+    code-fold: true
+    css: https://unpkg.com/leaflet@1.9.3/dist/leaflet.css
+jupyter: python3
+---
+
+```{python}
+#| echo: false
+import igraph as ig
+import pickle
+with open('AMT-nfeats-3.pkl', 'rb') as f:
+  g = pickle.load(f)
+
+def get_coords_for_edge_ids(path):
+  elist = g.get_edgelist()
+  edges = [(g.vs[elist[i][0]]['lat'], g.vs[elist[i][0]]['lon'], g.vs[elist[i][1]]['lat'], g.vs[elist[i][1]]['lon']) for i in path]
+  return edges
+```
+
+```{python}
+#| echo: false
+from ipyleaflet import Map, Polyline, basemaps, LayersControl
+from ipywidgets import Dropdown, VBox, Layout
+
+def draw_line(map, edges, color):
+  for src_lat, src_lon, tgt_lat, tgt_lon in edges:
+    line = Polyline(
+      locations=[(src_lat, src_lon), (tgt_lat, tgt_lon)],
+      color=color,
+      fill=False,
+      weight=5,
+      opacity=0.8
+    )
+    map.add_layer(line)
+
+#TODO: It appears to show all paths at once and isn't computing the center correctly
+def plot_paths(map, row):
+  
+  baseline_ids = eval(row["baseline_path_edge_ids"])
+  sd_ids = eval(row["sd_path_edge_ids"])
+
+  baseline_coords = get_coords_for_edge_ids(baseline_ids)
+  sd_coords = get_coords_for_edge_ids(sd_ids)
+
+  draw_line(map, baseline_coords, "red")
+  draw_line(map, sd_coords, "blue")
+
+  center_lat = sum([e[0] + e[2] for e in baseline_coords]) / (2 * len(baseline_coords))
+  center_lon = sum([e[1] + e[3] for e in baseline_coords]) / (2 * len(baseline_coords))
+  
+  map.center = (center_lat, center_lon)
+  map.zoom = 13
+```
+
+```{python}
+#| echo: false
+from ipywidgets import Output
+from IPython.display import HTML
+
+def plot_filtered_df(filtered_df):
+  maps = []
+  for index, row in filtered_df.iterrows():
+    out = Output()
+    with out:
+      display(HTML(f"<h4>Row {index}: Shared % = {row['Percent of edges sd path shares with baseline']} : Feature Optimized = {row['Feature']} : Baseline Length {row['baseline_path_length']} : SD Length {row['sd_length']}</h4>"))
+      m = Map(
+        basemap=basemaps.OpenStreetMap.Mapnik,
+        center=(0, 0),
+        zoom=2,
+        layout=Layout(height="500px")
+      )
+      plot_paths(m, row)
+      display(m)
+    maps.append(out)
+  return VBox(maps)
+```
+
+## SD Non-Robust (No Polytope Constraints)
+
+```{python}
+#| echo: false
+import pandas as pd
+df = pd.read_csv("sd_path_seattle_data.csv")
+filtered_df = df[df["Percent of edges sd path shares with baseline"] < 100.0].reset_index(drop=True)
+plot_filtered_df(filtered_df)
+```
+
+## SD Robust (Polytope Constraints)
+
+```{python}
+#| echo: false
+#import pandas as pd
+#df = pd.read_csv("rssd_polytope_seattle_data.csv")
+#robust_df = df[df["Percent of edges sd path shares with baseline"] < 100.0].reset_index(drop=True)
+```
