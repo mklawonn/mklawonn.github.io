@@ -36,11 +36,13 @@ def draw_line(map, edges, color):
     )
     map.add_layer(line)
 
-#TODO: It appears to show all paths at once and isn't computing the center correctly
-def plot_paths(map, row):
+def plot_paths(map, row, baseline_key, novel_key):
   
-  baseline_ids = eval(row["baseline_path_edge_ids"])
-  sd_ids = eval(row["sd_path_edge_ids"])
+  #baseline_ids = eval(row["baseline_path_edge_ids"])
+  #sd_ids = eval(row["sd_path_edge_ids"])
+
+  baseline_ids = eval(row[baseline_key])
+  sd_ids = eval(row[novel_key])
 
   baseline_coords = get_coords_for_edge_ids(baseline_ids)
   sd_coords = get_coords_for_edge_ids(sd_ids)
@@ -52,7 +54,7 @@ def plot_paths(map, row):
   center_lon = sum([e[1] + e[3] for e in baseline_coords]) / (2 * len(baseline_coords))
   
   map.center = (center_lat, center_lon)
-  map.zoom = 13
+  map.zoom = 15
 ```
 
 ```{python}
@@ -60,12 +62,13 @@ def plot_paths(map, row):
 from ipywidgets import Output
 from IPython.display import HTML
 
-def plot_filtered_df(filtered_df):
+def plot_filtered_df(filtered_df, baseline_key, novel_key):
   maps = []
   for index, row in filtered_df.iterrows():
     out = Output()
     with out:
-      display(HTML(f"<h4>Row {index}: Shared % = {row['Percent of edges sd path shares with baseline']} : Feature Optimized = {row['Feature']} : Baseline Length {row['baseline_path_length']} : SD Length {row['sd_length']}</h4>"))
+      #display(HTML(f"<h4>Row {index}: Shared % = {row['Percent of edges sd path shares with baseline']} : Feature Optimized = {row['Feature']} : Baseline Length {row['baseline_path_length']} : SD Length {row['sd_length']}</h4>"))
+      display(HTML(f"<h4>Row {index}"))
       m = Map(
         basemap=basemaps.OpenStreetMap.Mapnik,
         center=(0, 0),
@@ -85,14 +88,22 @@ def plot_filtered_df(filtered_df):
 import pandas as pd
 df = pd.read_csv("sd_path_seattle_data.csv")
 filtered_df = df[df["Percent of edges sd path shares with baseline"] < 100.0].reset_index(drop=True)
-plot_filtered_df(filtered_df)
+plot_filtered_df(filtered_df, "baseline_path_edge_ids", "sd_path_edge_ids")
+```
+
+## SD Robust
+
+```{python}
+#| echo: false
+import pandas as pd
+df = pd.read_csv("rssd_polytope_seattle_data.csv")
+#sd_robust = df[df["Percent of edges rssd path shares with baseline"] < 100.0].reset_index(drop=True)
+#plot_filtered_df(sd_robust, "baseline_path_edge_ids", "")
 ```
 
 ## SD Robust (Polytope Constraints)
 
 ```{python}
-#| echo: false
-#import pandas as pd
-#df = pd.read_csv("rssd_polytope_seattle_data.csv")
-#robust_df = df[df["Percent of edges sd path shares with baseline"] < 100.0].reset_index(drop=True)
+sd_robust_polytope = df[df["Percent of edges rssd path with theta restriction shares with baseline"] < 100.0].reset_index(drop=True)
+plot_filtered_df(sd_robust_polytope, "baseline_path_edge_ids", "sd_path_edge_ids")
 ```
