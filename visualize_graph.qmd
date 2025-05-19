@@ -75,7 +75,7 @@ def plot_filtered_df(filtered_df, baseline_key, novel_key):
         zoom=2,
         layout=Layout(height="500px")
       )
-      plot_paths(m, row)
+      plot_paths(m, row, baseline_key, novel_key)
       display(m)
     maps.append(out)
   return VBox(maps)
@@ -87,7 +87,8 @@ def plot_filtered_df(filtered_df, baseline_key, novel_key):
 #| echo: false
 import pandas as pd
 df = pd.read_csv("sd_path_seattle_data.csv")
-filtered_df = df[df["Percent of edges sd path shares with baseline"] < 100.0].reset_index(drop=True)
+#filtered_df = df[df["Percent of edges sd path shares with baseline"] < 100.0].reset_index(drop=True)
+filtered_df = df[df["Percent of edges sd path shares with baseline"] < 100.0]
 plot_filtered_df(filtered_df, "baseline_path_edge_ids", "sd_path_edge_ids")
 ```
 
@@ -104,6 +105,8 @@ df = pd.read_csv("rssd_polytope_seattle_data.csv")
 ## SD Robust (Polytope Constraints)
 
 ```{python}
-sd_robust_polytope = df[df["Percent of edges rssd path with theta restriction shares with baseline"] < 100.0].reset_index(drop=True)
-plot_filtered_df(sd_robust_polytope, "baseline_path_edge_ids", "sd_path_edge_ids")
+#| echo: false
+#sd_robust_polytope = df[df["Percent of edges rssd path with theta restriction shares with baseline"] < 100.0].reset_index(drop=True)
+sd_robust_polytope = df[df["Percent of edges rssd path with theta restriction shares with baseline"] < 100.0]
+plot_filtered_df(sd_robust_polytope, "benchmark path", "rssd2 path")
 ```
